@@ -1,0 +1,13 @@
+.bloop
+.idea
+.metals
+out
+quartus/**
+!quartus/toplevel.v
+!quartus/toplevel.sdc
+!quartus/toplevel.qsf
+!quartus/toplevel.qpf
+bsp.log
+/*.fir
+/*.json
+/*.v
