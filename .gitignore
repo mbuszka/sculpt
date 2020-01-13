@@ -11,3 +11,6 @@ bsp.log
 /*.fir
 /*.json
 /*.v
+project/**
+!project/build.properties
+target
