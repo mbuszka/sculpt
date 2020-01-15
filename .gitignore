@@ -14,3 +14,4 @@ bsp.log
 project/**
 !project/build.properties
 target
+test_run_dir

@@ -6,6 +6,8 @@ import cats.implicits._
 sealed trait Def
 case class Fun(name: String, args: Vector[String], body: Expr) extends Def {
   def definedNames: Vector[String] = (args.toSet ++ body.definedNames).toVector
+  lazy val regMap: Map[String, Int] = definedNames.zipWithIndex.toMap
+  lazy val parameters: Vector[Int] = args.map(regMap)
 }
 
 sealed trait Expr {
