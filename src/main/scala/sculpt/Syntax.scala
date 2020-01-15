@@ -1,9 +1,21 @@
 package sculpt
 
-sealed trait Def
-case class Fun(name: String, args: Vector[String], body: Expr) extends Def
+import cats._
+import cats.implicits._
 
-sealed trait Expr
+sealed trait Def
+case class Fun(name: String, args: Vector[String], body: Expr) extends Def {
+  def definedNames: Vector[String] = (args.toSet ++ body.definedNames).toVector
+}
+
+sealed trait Expr {
+  def definedNames: Set[String] = this match {
+    case Call(fun, args)        => Set()
+    case Match(value, branches) => branches.foldMap(_.definedNames)
+    case Let(name, prim, body)  => body.definedNames + name
+    case Halt(value)            => Set()
+  }
+}
 case class Call(fun: String, args: Vector[Atom]) extends Expr
 case class Match(value: Atom, branches: Vector[Pattern]) extends Expr
 case class Let(name: String, prim: Prim, body: Expr) extends Expr
@@ -21,7 +33,13 @@ sealed trait Atom
 case class Var(name: String) extends Atom
 case class Const(value: Int) extends Atom
 
-sealed trait Pattern 
+sealed trait Pattern {
+  def definedNames: Set[String] = this match {
+    case PatWild(expr)                   => Set()
+    case PatConstant(const, expr)        => expr.definedNames
+    case PatConstructor(tag, vars, expr) => vars.toSet ++ expr.definedNames
+  }
+}
 case class PatWild(expr: Expr) extends Pattern
 case class PatConstant(const: Const, expr: Expr) extends Pattern
 case class PatConstructor(tag: String, vars: Vector[String], expr: Expr)
