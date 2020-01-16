@@ -29,9 +29,9 @@ object Eval {
       store: Store,
       expr: Expr
   ): Value = {
-    println("Evaluating:")
-    pprint.pprintln(expr)
-    pprint.pprintln(env)
+    // println("Evaluating:")
+    // pprint.pprintln(expr)
+    // pprint.pprintln(env)
     expr match {
       case Halt(a) => atom(env)(a)
       case Call(fun, args) => 

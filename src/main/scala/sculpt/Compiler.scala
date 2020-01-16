@@ -8,6 +8,8 @@ import sculpt.Action.Fail
 import sculpt.Source.Register
 import sculpt.Source.Immediate
 import chisel3.internal.firrtl.Width
+import chisel3.util.log2Up
+import chisel3.util.MuxLookup
 
 sealed trait Action
 object Action {
@@ -48,7 +50,7 @@ object Compiler {
     val intWidth = 32.W
     val regCnt = usedNames(pgm).values.map(_.length).max
     val blocks = pgm.map(actions)
-    pprint.pprintln(blocks)
+    // pprint.pprintln(blocks)
     new Result(blocks, regCnt)
   }
 
@@ -58,9 +60,14 @@ object Compiler {
   }
 }
 
-case class ResIO(intWidth: Int, stateWidth: Int) extends Bundle {
+case class ResIO(intWidth: Int, stateWidth: Int, regCnt: Int) extends Bundle {
   val value = Output(SInt(intWidth.W))
   val status = Output(UInt(stateWidth.W))
+  val regSelect = Input(UInt(log2Up(regCnt).W))
+  val regWrite = Input(Bool())
+  val regWData = Input(SInt(intWidth.W))
+  val regRData = Output(SInt(intWidth.W))
+  val start = Input(Bool())
 }
 
 class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
@@ -78,10 +85,22 @@ class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
   val getState = indices.zip(rest).toMap
   val registers = Vector.fill(regCnt)(RegInit(0.asSInt(intWidth.W)))
   val state = RegInit(sInit)
+  val io = IO(new ResIO(intWidth, state.getWidth, regCnt))
   val result = Reg(SInt(intWidth.W))
   val next = state + 1.asUInt()
   val init = when(state === sInit) {
-    state := getState(("main", 0))
+    when(io.regWrite) {
+      var c = when(io.regSelect === 0.U){
+        registers(0) := io.regWData
+      }
+      for (i <- 1.until(regCnt)) {
+        c = c.elsewhen(io.regSelect === i.U){
+          registers(i) := io.regWData
+        }
+      }
+    }.elsewhen(io.start){
+      state := getState(("main", 0))
+    }
   }.elsewhen(state === sFail) {}
   indices.foldLeft(init) { (before, idx) =>
     actions(idx) match {
@@ -143,9 +162,9 @@ class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
   }.otherwise{
   }
 
-  val io = IO(new ResIO(intWidth, state.getWidth))
   io.value := result
   io.status := state
+  io.regRData := MuxLookup(io.regSelect, 0.S, registers.zipWithIndex.map { case (r, idx) => idx.U -> r })
 }
 
 case class ExprCompiler(registers: Map[String, Int]) {
