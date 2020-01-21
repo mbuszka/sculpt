@@ -1,0 +1,11 @@
+(def go (n m acc)
+  (match m
+    (0 (halt acc))
+    (else 
+      (let m (- m 1)
+        (let acc (+ n acc)
+          (go n m acc))))))
+(def mul (n m)
+  (go n m 0))
+
+(def main (n m) (mul n m))

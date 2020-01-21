@@ -28,7 +28,5 @@ class Hello extends Module {
 }
 
 object Hello {
-  def main(args: Array[String]): Unit = {
-    chisel3.Driver.execute(args, () => new Hello())
-  }
+  
 }

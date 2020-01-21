@@ -391,7 +391,7 @@ set_location_assignment PIN_AE12 -to SW[9]
 # End of pin assignments by Terasic System Builder
 #============================================================
 
-set_global_assignment -name VERILOG_FILE "../Hello.v"
+set_global_assignment -name VERILOG_FILE "../Result.v"
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
