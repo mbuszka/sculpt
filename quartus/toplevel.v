@@ -96,7 +96,7 @@ module toplevel(
 	// output		          		HPS_USB_STP
 );
 
-Hello hello(.clock(CLOCK_50), .reset(~KEY[0]), .io_led(LEDR[0]));
+system sys(.clk_clk(CLOCK_50), .reset_reset_n(KEY[0]));
 
 
 //=======================================================

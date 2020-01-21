@@ -26,11 +26,11 @@ class Spec extends FreeSpec with ChiselScalatestTester with Matchers {
   "Compatibility with Eval for:" - {
     "simple program" in {
       val pgm = """
-(def main (ignore)
-  (let x (+ 3 4)
+(def main (a b)
+  (let x (+ a b)
     (halt x)))
       """
-      testProgram(pgm, Vector(1))
+      testProgram(pgm, Vector(1, 2))
     }
 
     "recursive multiplication" in {
@@ -65,17 +65,31 @@ class Spec extends FreeSpec with ChiselScalatestTester with Matchers {
     val expr = Call("main", init.map(Const))
     val Num(expected) = Eval(defMap, Map(), Store(), expr)
     test(Compiler.compile(defs)) { res =>
-      res.io.start.poke(false.B)
+      res.io.address.poke("hFF".U)
+      res.io.readData.expect(0.S)
       for ((r, x) <- main.parameters.zip(init)) {
-        res.io.regSelect.poke(r.U)
-        res.io.regWData.poke(x.S)
-        res.io.regWrite.poke(true.B)
+        res.io.address.poke(r.U)
+        res.io.writeData.poke(x.S)
+        res.io.write.poke(true.B)
         res.clock.step()
       }
-      res.io.regWrite.poke(false.B)
-      res.io.start.poke(true.B)
+      res.io.write.poke(false.B)
+      for ((r, x) <- main.parameters.zip(init)) {
+        res.io.address.poke(r.U)
+        res.io.readData.expect(x.S)
+        res.clock.step()
+      }
+      res.io.write.poke(true.B)
+      res.io.address.poke("hFF".U)
+      res.clock.step()
+      res.io.write.poke(false.B)
+      res.io.address.poke("hFF".U)
+      res.io.readData.expect(1.S)
       res.clock.step(maxCycles)
-      res.io.value.expect(expected.S)
+      res.io.address.poke("hFF".U)
+      res.io.readData.expect(0.S)
+      res.io.address.poke("hFE".U)
+      res.io.readData.expect(expected.S)
     }
     assert(true)
   }

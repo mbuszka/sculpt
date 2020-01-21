@@ -61,13 +61,11 @@ object Compiler {
 }
 
 case class ResIO(intWidth: Int, stateWidth: Int, regCnt: Int) extends Bundle {
-  val value = Output(SInt(intWidth.W))
-  val status = Output(UInt(stateWidth.W))
-  val regSelect = Input(UInt(log2Up(regCnt).W))
-  val regWrite = Input(Bool())
-  val regWData = Input(SInt(intWidth.W))
-  val regRData = Output(SInt(intWidth.W))
-  val start = Input(Bool())
+  val address = Input(UInt(8.W))
+  // val read = Input(Bool())
+  val readData = Output(SInt(intWidth.W))
+  val write = Input(Bool())
+  val writeData = Input(SInt(intWidth.W))
 }
 
 class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
@@ -81,27 +79,37 @@ class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
         case (a, idx) => (n, idx) -> a
       }
   }.toMap
-  val sInit :: sFail :: sDone :: rest = Chisel.Enum(indices.size + 3)
+  val sIdle :: sFail :: rest = Chisel.Enum(indices.size + 2)
+  val stIdle :: stBusy :: stFailed :: Nil = Chisel.Enum(3)
   val getState = indices.zip(rest).toMap
   val registers = Vector.fill(regCnt)(RegInit(0.asSInt(intWidth.W)))
-  val state = RegInit(sInit)
+  val state = RegInit(sIdle)
   val io = IO(new ResIO(intWidth, state.getWidth, regCnt))
   val result = Reg(SInt(intWidth.W))
   val next = state + 1.asUInt()
-  val init = when(state === sInit) {
-    when(io.regWrite) {
-      var c = when(io.regSelect === 0.U){
-        registers(0) := io.regWData
+  val status = RegInit(stIdle)
+
+  io.readData := MuxLookup(
+    io.address,
+    status.asSInt(),
+    registers.zipWithIndex.map {
+      case (r, idx) => idx.U -> r
+    } ++ Map("hFE".U -> result, "hFF".U -> status.asSInt())
+  )
+
+  val init = when(state === sIdle) {
+    when(io.write) {
+      var c = when(io.address === "hFF".U && (status =/= stBusy)) {
+        state := getState(("main", 0))
+        status := stBusy
       }
-      for (i <- 1.until(regCnt)) {
-        c = c.elsewhen(io.regSelect === i.U){
-          registers(i) := io.regWData
+      for (i <- 0.until(regCnt)) {
+        c = c.elsewhen(io.address === i.U) {
+          registers(i) := io.writeData
         }
       }
-    }.elsewhen(io.start){
-      state := getState(("main", 0))
     }
-  }.elsewhen(state === sFail) {}
+  }
   indices.foldLeft(init) { (before, idx) =>
     actions(idx) match {
       case Update(dst, Add, lhs, rhs) =>
@@ -151,20 +159,17 @@ class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
         }
       case sculpt.Action.Halt(res) =>
         before.elsewhen(state === getState(idx)) {
-          state := sDone
+          state := sIdle
+          status := stIdle
           result := Compiler.source(registers)(res)
         }
       case Fail =>
         before.elsewhen(state === getState(idx)) {
-          state := sFail
+          state := sIdle
+          status := stFailed
         }
     }
-  }.otherwise{
   }
-
-  io.value := result
-  io.status := state
-  io.regRData := MuxLookup(io.regSelect, 0.S, registers.zipWithIndex.map { case (r, idx) => idx.U -> r })
 }
 
 case class ExprCompiler(registers: Map[String, Int]) {

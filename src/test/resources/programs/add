@@ -1,0 +1,3 @@
+(def main (a b)
+  (let x (+ a b)
+    (halt x)))
