@@ -8,6 +8,7 @@ quartus/**
 !quartus/toplevel.qsf
 !quartus/toplevel.qpf
 !quartus/system.qsys
+!quartus/processor_hw.tcl
 bsp.log
 /*.fir
 /*.json

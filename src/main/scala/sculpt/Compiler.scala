@@ -60,7 +60,24 @@ object Compiler {
   }
 }
 
-case class ResIO(intWidth: Int, stateWidth: Int, regCnt: Int) extends Bundle {
+case class MemoryIO(intWidth: Int = 32) extends Bundle {
+  val address = Input(UInt(10.W))
+  val readData = Output(SInt(intWidth.W))
+  val write = Input(Bool())
+  val writeData = Input(SInt(intWidth.W))
+}
+
+class Memory(size: Int = 1024) extends Module {
+  val io = IO(MemoryIO(32))
+  val readAddr = RegNext(io.address)
+  val mem = SyncReadMem(size, SInt(io.intWidth.W))
+  io.readData := mem.read(readAddr)
+  when(io.write) {
+    mem.write(io.address, io.writeData)
+  }
+}
+
+case class ResIO(intWidth: Int) extends Bundle {
   val address = Input(UInt(8.W))
   // val read = Input(Bool())
   val readData = Output(SInt(intWidth.W))
@@ -84,17 +101,21 @@ class Result(blocks: Vector[(String, Block)], regCnt: Int) extends Module {
   val getState = indices.zip(rest).toMap
   val registers = Vector.fill(regCnt)(RegInit(0.asSInt(intWidth.W)))
   val state = RegInit(sIdle)
-  val io = IO(new ResIO(intWidth, state.getWidth, regCnt))
+  val io = IO(new ResIO(intWidth))
   val result = Reg(SInt(intWidth.W))
   val next = state + 1.asUInt()
   val status = RegInit(stIdle)
-
+  val mem = Module(new Memory(1024))
+  mem.io.writeData := io.writeData
+  mem.io.write := io.write
+  mem.io.address := io.address
+  
   io.readData := MuxLookup(
     io.address,
     status.asSInt(),
     registers.zipWithIndex.map {
       case (r, idx) => idx.U -> r
-    } ++ Map("hFE".U -> result, "hFF".U -> status.asSInt())
+    } ++ Map("hFE".U -> result, "hFF".U -> status.asSInt(), "hFD".U -> mem.io.readData)
   )
 
   val init = when(state === sIdle) {
