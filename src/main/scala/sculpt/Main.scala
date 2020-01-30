@@ -6,6 +6,14 @@ import java.io._
 import fastparse.Parsed.Failure
 import fastparse.Parsed.Success
 
+object Pipeline {
+  def apply(program: Program): Result = {
+    val asm = Assemble(Compile(program))
+    val regCount = Analysis.requiredRegisters(program)
+    new Result(asm, regCount)
+  }
+}
+
 object Main {
   def main(args: Array[String]): Unit = {
     val fileName = args.head
@@ -18,6 +26,6 @@ object Main {
       case Success(value, index) =>
         value
     }
-    chisel3.Driver.execute(chiselArgs, () => Compiler.compile(pgm))
+    chisel3.Driver.execute(chiselArgs, () => Pipeline(pgm))
   }
 }

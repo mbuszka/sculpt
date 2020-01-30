@@ -64,32 +64,35 @@ class Spec extends FreeSpec with ChiselScalatestTester with Matchers {
     val main = defMap("main")
     val expr = Call("main", init.map(Const))
     val Num(expected) = Eval(defMap, Map(), Store(), expr)
-    test(Compiler.compile(defs)) { res =>
-      res.io.address.poke("hFF".U)
-      res.io.readData.expect(0.S)
-      for ((r, x) <- main.parameters.zip(init)) {
-        res.io.address.poke(r.U)
-        res.io.writeData.poke(x.S)
+    test(Pipeline(defs)) { res =>
+      def write(addr: UInt, value: SInt) = {
+        res.io.address.poke(addr)
+        res.io.writeData.poke(value)
         res.io.write.poke(true.B)
         res.clock.step()
+        res.io.write.poke(false.B)
       }
-      res.io.write.poke(false.B)
+      def check(addr: UInt, expected: SInt) = {
+        res.io.address.poke(addr)
+        res.io.readData.expect(expected)  
+      }
+      check("hFF".U, Status.Idle.S) // check that processor is initialized idle
+      // load data to registers
       for ((r, x) <- main.parameters.zip(init)) {
-        res.io.address.poke(r.U)
-        res.io.readData.expect(x.S)
-        res.clock.step()
+        write(r.U, x.S)
       }
-      res.io.write.poke(true.B)
-      res.io.address.poke("hFF".U)
-      res.clock.step()
-      res.io.write.poke(false.B)
-      res.io.address.poke("hFF".U)
-      res.io.readData.expect(1.S)
-      res.clock.step(maxCycles)
-      res.io.address.poke("hFF".U)
-      res.io.readData.expect(0.S)
-      res.io.address.poke("hFE".U)
-      res.io.readData.expect(expected.S)
+      // check that data was correctly loaded
+      for ((r, x) <- main.parameters.zip(init)) {
+        check(r.U, x.S)
+      }
+      
+      write("hFF".U, 0.S) // begin execution
+      check("hFF".U, Status.Busy.S) // check that processor is busy
+      
+      res.clock.step(maxCycles) // let it run for a while
+      check("hFF".U, Status.Idle.S) // check that it finished
+      
+      check("hFE".U, expected.S) // check the result w.r.t. eval
     }
     assert(true)
   }
