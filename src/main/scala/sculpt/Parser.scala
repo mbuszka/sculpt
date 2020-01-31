@@ -37,8 +37,8 @@ object Parser {
   def atom[_: P]: P[Atom] = P(ident.map(Var) | num.map(Const))
 
   def prim[_: P]: P[Prim] = P(
-    parens(P(op ~ atom.rep(1).map(_.toVector)).map(PrimOp.apply _ tupled)) |
-      parens(P(tag ~ atom.rep.map(_.toVector)).map(Constructor.apply _ tupled))
+    parens(P(op ~ atom.rep(1).map(_.toVector)).map(PrimOp.apply _ tupled) |
+      P(tag ~ atom.rep.map(_.toVector)).map(Constructor.apply _ tupled))
   )
 
   def expr[_: P]: P[Expr] = P(

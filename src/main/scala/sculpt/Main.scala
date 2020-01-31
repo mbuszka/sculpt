@@ -7,10 +7,12 @@ import fastparse.Parsed.Failure
 import fastparse.Parsed.Success
 
 object Pipeline {
-  def apply(program: Program): Result = {
+  def apply(program: Program, verbose: Boolean = false): Result = {
     val asm = Assemble(Compile(program))
+    if (verbose) pprint.pprintln(asm, height = 500)
     val regCount = Analysis.requiredRegisters(program)
-    new Result(asm, regCount)
+    val structSize = Analysis.maxStructSize(program).max(1)
+    new Result(asm, regCount, structSize)
   }
 }
 

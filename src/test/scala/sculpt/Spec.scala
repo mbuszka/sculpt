@@ -50,21 +50,47 @@ class Spec extends FreeSpec with ChiselScalatestTester with Matchers {
         """
       testProgram(pgm, Vector(10, 17))
     }
+
+    "memory usage" in {
+      val pgm = """
+(def gen (n acc)
+  (match n
+    (0 (sum acc 0))
+    (else
+      (let xs (Cons n acc)
+        (let n (- n 1)
+          (gen n xs))))))
+
+(def sum (lst acc)
+  (match lst
+    (Nil (halt acc))
+    (Cons x lst
+      (let acc (+ acc x)
+        (sum lst acc)))))
+      
+(def main (n)
+  (let nil (Nil)
+    (gen n nil)))
+      """
+      testProgram(pgm, Vector(15))
+    }
   }
 
   def testProgram(
       pgm: String,
       init: Vector[Int],
-      maxCycles: Int = 1000
+      maxCycles: Int = 1000,
+      verbose: Boolean = false
   ): Assertion = {
     val res = parse(pgm, Parser.program(_))
     res shouldBe a[Parsed.Success[_]]
     val defs = res.get.value
+    if (verbose) pprint.pprintln(defs, height = 100)
     val defMap = defs.map(f => f.name -> f).toMap
     val main = defMap("main")
     val expr = Call("main", init.map(Const))
     val Num(expected) = Eval(defMap, Map(), Store(), expr)
-    test(Pipeline(defs)) { res =>
+    test(Pipeline(defs, verbose=verbose)) { res =>
       def write(addr: UInt, value: SInt) = {
         res.io.address.poke(addr)
         res.io.writeData.poke(value)

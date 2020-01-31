@@ -14,4 +14,8 @@ object Analysis {
   def requiredRegisters(program: Program): Int = {
     program.map(_.definedNames.size).max
   }
+
+  def maxStructSize(program: Program): Int = {
+    program.map(_.maxStructSize).max
+  }
 }

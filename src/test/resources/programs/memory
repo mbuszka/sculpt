@@ -1,0 +1,18 @@
+(def gen (n acc)
+  (match n
+    (0 (sum acc 0))
+    (else
+      (let xs (Cons n acc)
+        (let n (- n 1)
+          (gen n xs))))))
+
+(def sum (lst acc)
+  (match lst
+    (Nil (halt acc))
+    (Cons x lst
+      (let acc (+ acc x)
+        (sum lst acc)))))
+      
+(def main (n)
+  (let nil (Nil)
+    (gen n nil)))

@@ -6,17 +6,18 @@ import chisel3.internal.firrtl.Width
 import chisel3.util.log2Up
 import chisel3.util.MuxLookup
 
-case class MemoryIO(intWidth: Int = 32) extends Bundle {
-  val address = Input(UInt(10.W))
-  val readData = Output(SInt(intWidth.W))
+case class MemoryIO(intWidth: Int, structSize: Int, addrSize: Int)
+    extends Bundle {
+  val address = Input(UInt(addrSize.W))
+  val readData = Output(Vec(structSize, SInt(intWidth.W)))
   val write = Input(Bool())
-  val writeData = Input(SInt(intWidth.W))
+  val writeData = Input(Vec(structSize, SInt(intWidth.W)))
 }
 
-class Memory(size: Int = 1024) extends Module {
-  val io = IO(MemoryIO(32))
+class Memory(intWidth: Int, structSize: Int, addrSize: Int) extends Module {
+  val io = IO(MemoryIO(intWidth, structSize, addrSize))
   val readAddr = RegNext(io.address)
-  val mem = SyncReadMem(size, SInt(io.intWidth.W))
+  val mem = SyncReadMem(1 << addrSize, Vec(structSize, SInt(io.intWidth.W)))
   io.readData := mem.read(readAddr)
   when(io.write) {
     mem.write(io.address, io.writeData)
@@ -59,8 +60,9 @@ class States(asm: Assembly) {
   def jump(label: Label): UInt = asm.offsets(label).U
 }
 
-class Result(asm: Assembly, regCnt: Int) extends Module {
+class Result(asm: Assembly, regCnt: Int, structSize: Int) extends Module {
   val intWidth = 32
+  val addrSize = 10
 
   // State machine states
   val states = new States(asm)
@@ -76,10 +78,13 @@ class Result(asm: Assembly, regCnt: Int) extends Module {
   val registers = Vector.fill(regCnt)(RegInit(0.S(intWidth.W)))
 
   // Memory WIP
-  val mem = Module(new Memory(1024))
-  mem.io.writeData := io.writeData
-  mem.io.write := io.write
-  mem.io.address := io.address
+  val mem = Module(new Memory(intWidth, structSize, addrSize))
+  val nextFree = RegInit(UInt(addrSize.W), 0.U)
+  val readAddr = RegInit(UInt(addrSize.W), 0.U)
+  mem.io.address := readAddr
+  mem.io.write := false.B
+  mem.io.writeData := VecInit(Seq.fill(structSize)(0.S))
+  val stall = RegInit(0.U(2.W))
 
   // Output routing
   io.readData := MuxLookup(
@@ -89,8 +94,7 @@ class Result(asm: Assembly, regCnt: Int) extends Module {
       case (r, idx) => idx.U -> r
     } ++ Map(
       "hFE".U -> result,
-      "hFF".U -> status.asSInt(),
-      "hFD".U -> mem.io.readData
+      "hFF".U -> status.asSInt()
     )
   )
 
@@ -121,8 +125,23 @@ class Result(asm: Assembly, regCnt: Int) extends Module {
           }.otherwise {
             state := states.jump(default)
           }
-        case Asm.Load(addr)                          => ???
-        case Asm.Store(addressRegister, tag, values) => ???
+        case Asm.Load(addr) =>
+          stall := stall + 1.U
+          when(stall === 0.U) {
+            readAddr := src(addr).asUInt()
+          }.elsewhen(stall === 3.U) {
+            state := next
+          }
+        case Asm.Store(addressRegister, tag, values) =>
+          registers(addressRegister) := nextFree.asSInt()
+          mem.io.writeData(0) := tag.S
+          values.zipWithIndex.foreach {
+            case (s, i) => mem.io.writeData(i + 1) := src(s)
+          }
+          mem.io.address := nextFree
+          mem.io.write := true.B
+          nextFree := nextFree + 1.U
+          state := next
         case Asm.Halt(res) =>
           result := src(res)
           state := states.idle.rep
@@ -136,7 +155,8 @@ class Result(asm: Assembly, regCnt: Int) extends Module {
   private def src(s: Src): SInt = s match {
     case Src.Reg(index)  => registers(index)
     case Src.Imm(value)  => value.S
-    case Src.Mem(offset) => ???
+    case Src.Mem(offset) =>
+      mem.io.readData(offset)
   }
 
   // handle register initialization and execution start

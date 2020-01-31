@@ -146,7 +146,7 @@ class FunCompilerClosure(
           case PatConstructor(tag, vars, expr) if tp != MatchInt =>
             val assignments = vars.zipWithIndex.map {
               case (name, offset) =>
-                Assign(reg(name), Nop, Vector(Mem(offset)))
+                Assign(reg(name), Nop, Vector(Mem(offset + 1)))
             }
             jumps.append((programTags(tag), lbl))
             val asm = expression(expr, Vector(Asm.Update(None, assignments)))
